@@ -374,3 +374,17 @@ def plot_train_history(history, title=None):
     plt.legend()
 
     plt.show()
+    
+    
+    
+def print_import():
+    print("""
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+import warnings
+warnings.filterwarnings("ignore")
+
+pd.set_option('display.max_columns', None)
+    """)
