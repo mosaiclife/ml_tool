@@ -13,6 +13,8 @@ warnings.filterwarnings("ignore")
 # 모델 관련 Function
 # AWS S3 관련 Function
 # Plot Function
+# MySql Function
+# 기타 Function
 
 
 ##############################
@@ -425,3 +427,119 @@ warnings.filterwarnings("ignore")
 
 pd.set_option('display.max_columns', None)
     """)
+
+    
+##############################
+# MySql Function
+##############################
+def get_mysql_conn(connect=True):
+    from sqlalchemy import create_engine
+    import pymysql
+    pymysql.install_as_MySQLdb()
+
+    # credentials to create database connections
+    db_driver = 'mysql+mysqldb'
+    db_username = 'stock'
+    db_password = 'stock'
+    db_ipaddress = 'mariadb'
+    db_port = '3306'
+    db_dbname = 'stock'
+
+    # database connection ... refresh last line before each dataframe read
+    str_mariadb_con = f'{db_driver}://{db_username}:{db_password}@{db_ipaddress}:{db_port}/{db_dbname}'
+    mariadb_engine = create_engine(str_mariadb_con)
+    
+    if connect:
+        mariadb_connection = mariadb_engine.connect()
+        return mariadb_connection
+    else:
+        return mariadb_engine
+
+def get_mysql_data(sql):
+    conn = get_mysql_conn()
+    
+    from sqlalchemy import text as sql_text
+    
+    df = pd.read_sql_query(sql_text(sql), conn)
+
+    conn.close()
+    
+    return df
+
+def save_mysql_data(df, table_name):
+    engine = get_mysql_conn(connect=False)
+    
+    with engine.begin() as connection:
+        df.to_sql(table_name, engine, if_exists='append', index=False)
+        engine.dispose()
+        
+def delete_mysql(table_name):
+    from sqlalchemy import text as sql_text
+    
+    engine = get_mysql_conn()
+    engine.execute(sql_text("TRUNCATE TABLE " + table_name))
+
+    engine.close()
+
+def sql_mysql(sql):
+    from sqlalchemy import text as sql_text
+    
+    engine = get_mysql_conn()
+    engine.execute(sql_text(sql))
+
+    engine.close()
+
+
+
+
+
+
+##############################
+# 기타 Function
+##############################
+
+import time
+from functools import wraps
+
+# retry decorator
+def retry(ExceptionToCheck, tries=4, delay=3, backoff=2, logger=None):
+    """Retry calling the decorated function using an exponential backoff.
+
+    http://www.saltycrane.com/blog/2009/11/trying-out-retry-decorator-python/
+    original from: http://wiki.python.org/moin/PythonDecoratorLibrary#Retry
+
+    :param ExceptionToCheck: the exception to check. may be a tuple of
+        exceptions to check
+    :type ExceptionToCheck: Exception or tuple
+    :param tries: number of times to try (not retry) before giving up
+    :type tries: int
+    :param delay: initial delay between retries in seconds
+    :type delay: int
+    :param backoff: backoff multiplier e.g. value of 2 will double the delay
+        each retry
+    :type backoff: int
+    :param logger: logger to use. If None, print
+    :type logger: logging.Logger instance
+    """
+    def deco_retry(f):
+
+        @wraps(f)
+        def f_retry(*args, **kwargs):
+            mtries, mdelay = tries, delay
+            while mtries > 1:
+                try:
+                    return f(*args, **kwargs)
+                except ExceptionToCheck as e:
+                    msg = "%s, Retrying in %d seconds..." % (str(e), mdelay)
+                    if logger:
+                        logger.warning(msg)
+                    else:
+                        print(msg)
+                    time.sleep(mdelay)
+                    mtries -= 1
+                    mdelay *= backoff
+            return f(*args, **kwargs)
+
+        return f_retry  # true decorator
+
+    return deco_retry
