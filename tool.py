@@ -6,7 +6,7 @@ import numpy as np
 import warnings
 
 warnings.filterwarnings("ignore")
-
+from sqlalchemy import text as sql_text
 
 # List
 # Pandas 관련 Function
@@ -447,47 +447,36 @@ def get_mysql_conn(connect=True):
 
     # database connection ... refresh last line before each dataframe read
     str_mariadb_con = f'{db_driver}://{db_username}:{db_password}@{db_ipaddress}:{db_port}/{db_dbname}'
-    mariadb_engine = create_engine(str_mariadb_con)
+    mariadb_engine = create_engine(str_mariadb_con, pool_recycle=3600)  # 연결 재사용 설정
     
     if connect:
-        mariadb_connection = mariadb_engine.connect()
-        return mariadb_connection
-    else:
-        return mariadb_engine
+        return mariadb_engine.connect()
+    return mariadb_engine
 
 def get_mysql_data(sql):
-    conn = get_mysql_conn()
-    
-    from sqlalchemy import text as sql_text
-    
-    df = pd.read_sql_query(sql_text(sql), conn)
-
-    conn.close()
-    
+    engine = get_mysql_conn(connect=False)
+    with engine.connect() as conn:
+        df = pd.read_sql_query(sql_text(sql), conn)
+    engine.dispose()  # 엔진 자원 해제
     return df
 
 def save_mysql_data(df, table_name):
     engine = get_mysql_conn(connect=False)
-    
     with engine.begin() as connection:
-        df.to_sql(table_name, engine, if_exists='append', index=False)
-        engine.dispose()
+        df.to_sql(table_name, connection, if_exists='append', index=False)
+    engine.dispose()  # 엔진 자원 해제
         
 def delete_mysql(table_name):
-    from sqlalchemy import text as sql_text
-    
-    engine = get_mysql_conn()
-    engine.execute(sql_text("TRUNCATE TABLE " + table_name))
-
-    engine.close()
+    engine = get_mysql_conn(connect=False)
+    with engine.begin() as connection:
+        connection.execute(sql_text(f"TRUNCATE TABLE {table_name}"))
+    engine.dispose()  # 엔진 자원 해제
 
 def sql_mysql(sql):
-    from sqlalchemy import text as sql_text
-    
-    engine = get_mysql_conn()
-    engine.execute(sql_text(sql))
-
-    engine.close()
+    engine = get_mysql_conn(connect=False)
+    with engine.begin() as connection:
+        connection.execute(sql_text(sql))
+    engine.dispose()  # 엔진 자원 해제
 
 
 
